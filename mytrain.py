@@ -67,41 +67,6 @@ WORLD_SIZE = int(os.getenv('WORLD_SIZE', 1))
 
 
 def main(opt):
-    # data = sys.argv[1]
-
-    # if args.seed is not None:
-    #     random.seed(args.seed)
-    #     torch.manual_seed(args.seed)
-    #     cudnn.deterministic = True
-    #     warnings.warn('You have chosen to seed training. '
-    #                   'This will turn on the CUDNN deterministic setting, '
-    #                   'which can slow down your training considerably! '
-    #                   'You may see unexpected behavior when restarting '
-    #                   'from checkpoints.')
-
-    # if args.gpu is not None:
-    #     warnings.warn('You have chosen a specific GPU. This will completely '
-    #                   'disable data parallelism.')
-
-    # if args.dist_url == "env://" and args.world_size == -1:
-    #     args.world_size = int(os.environ["WORLD_SIZE"])
-
-    # args.distributed = args.world_size > 1 or args.multiprocessing_distributed
-
-    ngpus_per_node = torch.cuda.device_count()
-    print(ngpus_per_node)
-    # print(args.multiprocessing_distributed)
-
-    # if args.multiprocessing_distributed:
-    #     # Since we have ngpus_per_node processes per node, the total world_size
-    #     # needs to be adjusted accordingly
-    #     args.world_size = ngpus_per_node * args.world_size
-    #     # Use torch.multiprocessing.spawn to launch distributed processes: the
-    #     # main_worker process function
-    #     mp.spawn(main_worker, nprocs=ngpus_per_node, args=(ngpus_per_node, args))
-    # else:
-    #     # Simply call main_worker function
-    #     main_worker(args.gpu, ngpus_per_node, args)
     # main_worker(gpu=None, ngpus_per_node=1, arges=opt)
 
     # Checks
@@ -149,6 +114,7 @@ def main(opt):
 
     # Train
     if not opt.evolve:
+        # print('here')
         train(opt.hyp, opt, device)
         if WORLD_SIZE > 1 and RANK == 0:
             _ = [print('Destroying process group... ', end=''), dist.destroy_process_group(), print('Done.')]
@@ -242,6 +208,15 @@ def main(opt):
 
 
 def main_worker(gpu, ngpus_per_node, args):
+    """
+    Namespace(data='/data/taiyo', arch='resnet50', workers=32, epochs=200,
+              start_epoch=0, batch_size=256, lr=0.03, schedule=[120, 160],
+              momentum=0.9, weight_decay=0.0001, print_freq=10, resume='',
+              world_size=-1, rank=-1, dist_url='tcp://224.66.41.62:23456',
+              dist_backend='nccl', seed=None, gpu=None,
+              multiprocessing_distributed=False, moco_dim=128, moco_k=65536,
+              moco_m=0.999, moco_t=0.07, mlp=False, aug_plus=False, cos=False)
+    """
     args.gpu = gpu
 
     # suppress printing if not master
@@ -261,23 +236,6 @@ def main_worker(gpu, ngpus_per_node, args):
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
 
-    # # optionally resume from a checkpoint
-    # if args.resume:
-    #     if os.path.isfile(args.resume):
-    #         print("=> loading checkpoint '{}'".format(args.resume))
-    #         if args.gpu is None:
-    #             checkpoint = torch.load(args.resume)
-    #         else:
-    #             # Map model to be loaded to specified single gpu.
-    #             loc = 'cuda:{}'.format(args.gpu)
-    #             checkpoint = torch.load(args.resume, map_location=loc)
-    #         args.start_epoch = checkpoint['epoch']
-    #         model.load_state_dict(checkpoint['state_dict'])
-    #         optimizer.load_state_dict(checkpoint['optimizer'])
-    #         print("=> loaded checkpoint '{}' (epoch {})"
-    #               .format(args.resume, checkpoint['epoch']))
-    #     else:
-    #         print("=> no checkpoint found at '{}'".format(args.resume))
 
     cudnn.benchmark = True
 
@@ -285,29 +243,6 @@ def main_worker(gpu, ngpus_per_node, args):
     traindir = os.path.join(args.data, 'train')
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
                                      std=[0.229, 0.224, 0.225])
-    # if args.aug_plus:
-    #     # MoCo v2's aug: similar to SimCLR https://arxiv.org/abs/2002.05709
-    #     augmentation = [
-    #         transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
-    #         transforms.RandomApply([
-    #             transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)  # not strengthened
-    #         ], p=0.8),
-    #         transforms.RandomGrayscale(p=0.2),
-    #         transforms.RandomApply([moco.loader.GaussianBlur([.1, 2.])], p=0.5),
-    #         transforms.RandomHorizontalFlip(),
-    #         transforms.ToTensor(),
-    #         normalize
-    #     ]
-    # else:
-    #     # MoCo v1's aug: the same as InstDisc https://arxiv.org/abs/1805.01978
-    #     augmentation = [
-    #         transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
-    #         transforms.RandomGrayscale(p=0.2),
-    #         transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
-    #         transforms.RandomHorizontalFlip(),
-    #         transforms.ToTensor(),
-    #         normalize
-    #     ]
 
     train_dataset = datasets.ImageFolder(
         traindir,
@@ -340,51 +275,53 @@ def main_worker(gpu, ngpus_per_node, args):
             }, is_best=False, filename='checkpoint_{:04d}.pth.tar'.format(epoch))
 
 
-# def train(train_loader, model, criterion, optimizer, epoch, args):
-#     batch_time = AverageMeter('Time', ':6.3f')
-#     data_time = AverageMeter('Data', ':6.3f')
-#     losses = AverageMeter('Loss', ':.4e')
-#     top1 = AverageMeter('Acc@1', ':6.2f')
-#     top5 = AverageMeter('Acc@5', ':6.2f')
-#     progress = ProgressMeter(
-#         len(train_loader),
-#         [batch_time, data_time, losses, top1, top5],
-#         prefix="Epoch: [{}]".format(epoch))
-#
-#     # switch to train mode
-#     model.train()
-#
-#     end = time.time()
-#     for i, (images, _) in enumerate(train_loader):
-#         # measure data loading time
-#         data_time.update(time.time() - end)
-#
-#         if args.gpu is not None:
-#             images[0] = images[0].cuda(args.gpu, non_blocking=True)
-#             images[1] = images[1].cuda(args.gpu, non_blocking=True)
-#
-#         # compute output
-#         output, target = model(im_q=images[0], im_k=images[1])
-#         loss = criterion(output, target)
-#
-#         # acc1/acc5 are (K+1)-way contrast classifier accuracy
-#         # measure accuracy and record loss
-#         acc1, acc5 = accuracy(output, target, topk=(1, 5))
-#         losses.update(loss.item(), images[0].size(0))
-#         top1.update(acc1[0], images[0].size(0))
-#         top5.update(acc5[0], images[0].size(0))
-#
-#         # compute gradient and do SGD step
-#         optimizer.zero_grad()
-#         loss.backward()
-#         optimizer.step()
-#
-#         # measure elapsed time
-#         batch_time.update(time.time() - end)
-#         end = time.time()
-#
-#         if i % args.print_freq == 0:
-#             progress.display(i)
+def moco_train(train_loader, model, criterion, optimizer, epoch, args):
+    batch_time = AverageMeter('Time', ':6.3f')
+    data_time = AverageMeter('Data', ':6.3f')
+    losses = AverageMeter('Loss', ':.4e')
+    top1 = AverageMeter('Acc@1', ':6.2f')
+    top5 = AverageMeter('Acc@5', ':6.2f')
+    progress = ProgressMeter(
+        len(train_loader),
+        [batch_time, data_time, losses, top1, top5],
+        prefix="Epoch: [{}]".format(epoch))
+
+    # switch to train mode
+    model.train()
+
+    end = time.time()
+    for i, (images, _) in enumerate(train_loader):
+        # measure data loading time
+        data_time.update(time.time() - end)
+
+        if args.gpu is not None:
+            images[0] = images[0].cuda(args.gpu, non_blocking=True)
+            images[1] = images[1].cuda(args.gpu, non_blocking=True)
+
+        # compute output
+        output, target = model(im_q=images[0], im_k=images[1])
+        loss = criterion(output, target)
+
+        # acc1/acc5 are (K+1)-way contrast classifier accuracy
+        # measure accuracy and record loss
+        acc1, acc5 = accuracy(output, target, topk=(1, 5))
+        losses.update(loss.item(), images[0].size(0))
+        top1.update(acc1[0], images[0].size(0))
+        top5.update(acc5[0], images[0].size(0))
+
+        # compute gradient and do SGD step
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        # measure elapsed time
+        batch_time.update(time.time() - end)
+        end = time.time()
+
+        if i % args.print_freq == 0:
+            progress.display(i)
+
+
 def train(hyp,  # path/to/hyp.yaml or hyp dictionary
           opt,
           device,
@@ -436,7 +373,12 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     assert len(names) == nc, f'{len(names)} names found for nc={nc} dataset in {data}'  # check
     is_coco = data.endswith('coco.yaml') and nc == 80  # COCO dataset
 
-    # Model
+    # strat:@moce Model
+    moco_model = moco.moco.builder.MoCo(
+        models.__dict__[opt.arch],
+        opt.moco_dim, opt.moco_k, opt.moco_m, opt.moco_t, opt.mlp).to(device)
+    opt.lr = 0.03
+    # end:@moco
     pretrained = weights.endswith('.pt')
     if pretrained:
         with torch_distributed_zero_first(RANK):
@@ -458,6 +400,25 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
         if any(x in k for x in freeze):
             print(f'freezing {k}')
             v.requires_grad = False
+
+    # moco define loss function (criterion) and optimizer
+    moco_criterion = nn.CrossEntropyLoss().cuda(None)
+
+    moco_optimizer = torch.optim.SGD(model.parameters(), 0.03,
+                                momentum=0.9,
+                                weight_decay=0.001)
+    # cudnn.benchmark = True
+
+    # Data loading code
+    # traindir = os.path.join(args.data, 'train')
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
+
+    # train_dataset = datasets.ImageFolder(
+    #     traindir,
+    #     moco.loader.TwoCropsTransform(transforms.Compose(augmentation)))
+
+
 
     # Optimizer
     nbs = 64  # nominal batch size
@@ -534,6 +495,37 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model).to(device)
         LOGGER.info('Using SyncBatchNorm()')
 
+    # start:@moco
+    if opt.aug_plus:
+        # MoCo v2's aug: similar to SimCLR https://arxiv.org/abs/2002.05709
+        augmentation = [
+            transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
+            transforms.RandomApply([
+                transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)  # not strengthened
+            ], p=0.8),
+            transforms.RandomGrayscale(p=0.2),
+            transforms.RandomApply([moco.loader.GaussianBlur([.1, 2.])], p=0.5),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize
+        ]
+    else:
+        # MoCo v1's aug: the same as InstDisc https://arxiv.org/abs/1805.01978
+        augmentation = [
+            transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
+            transforms.RandomGrayscale(p=0.2),
+            transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize
+        ]
+    moco_train_dataset = datasets.ImageFolder(
+        train_path,
+        moco.moco.loader.TwoCropsTransform(transforms.Compose(augmentation)))
+    moco_train_loader = torch.utils.data.DataLoader(
+        moco_train_dataset, batch_size=opt.batch, shuffle=True,
+        num_workers=opt.workers, pin_memory=True, sampler=None, drop_last=True)
+    # end:@modo
     # Trainloader
     train_loader, dataset = create_dataloader(train_path, imgsz, batch_size // WORLD_SIZE, gs, single_cls,
                                               hyp=hyp, augment=True, cache=opt.cache, rect=opt.rect, rank=RANK,
@@ -594,6 +586,10 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                 f'Logging results to {save_dir}\n'
                 f'Starting training for {epochs} epochs...')
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
+        # start:@moco
+        adjust_learning_rate(moco_optimizer, epoch, opt)
+        moco_train(moco_train_loader, moco_model, moco_criterion, moco_optimizer, epoch, opt)
+        # end:@moco
         model.train()
 
         # Update image weights (optional)
@@ -828,6 +824,34 @@ def accuracy(output, target, topk=(1,)):
 
 def parse_opt(known=False):
     parser = argparse.ArgumentParser()
+    # moco parser
+    parser.add_argument('--lr', '--learning-rate', default=0.03, type=float,
+                        metavar='LR', help='initial learning rate', dest='lr')
+    parser.add_argument('--schedule', default=[120, 160], nargs='*', type=int,
+                        help='learning rate schedule (when to drop lr by 10x)')
+
+    # moco specific configs:
+    parser.add_argument('--moco-dim', default=128, type=int,
+                        help='feature dimension (default: 128)')
+    parser.add_argument('--moco-k', default=65536, type=int,
+                        help='queue size; number of negative keys (default: 65536)')
+    parser.add_argument('--moco-m', default=0.999, type=float,
+                        help='moco momentum of updating key encoder (default: 0.999)')
+    parser.add_argument('--moco-t', default=0.07, type=float,
+                        help='softmax temperature (default: 0.07)')
+    parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet50',
+                        choices=model_names,
+                        help='moco model architecture: ' +
+                             ' | '.join(model_names) +
+                             ' (default: resnet50)')
+    # options for moco v2
+    parser.add_argument('--mlp', action='store_true',
+                        help='use mlp head')
+    parser.add_argument('--aug-plus', action='store_true',
+                        help='use moco v2 data augmentation')
+    parser.add_argument('--cos', action='store_true',
+                        help='use cosine lr schedule')
+
     parser.add_argument('--weights', type=str, default='yolov5s.pt', help='initial weights path')
     parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
     parser.add_argument('--data', type=str, default='data/coco128.yaml', help='dataset.yaml path')
