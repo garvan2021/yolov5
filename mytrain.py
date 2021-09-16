@@ -38,7 +38,8 @@ sys.path.append(FILE.parents[0].as_posix())  # add yolov5/ to path
 
 import val  # for end-of-epoch mAP
 from models.experimental import attempt_load
-from models.yolo import Model
+# from models.yolo import Model
+from models.moco_yolo import Model
 from utils.autoanchor import check_anchors
 from utils.datasets import create_dataloader
 from utils.general import labels_to_class_weights, increment_path, labels_to_image_weights, init_seeds, \
@@ -207,72 +208,72 @@ def main(opt):
               f'Use best hyperparameters example: $ python train.py --hyp {evolve_yaml}')
 
 
-def main_worker(gpu, ngpus_per_node, args):
-    """
-    Namespace(data='/data/taiyo', arch='resnet50', workers=32, epochs=200,
-              start_epoch=0, batch_size=256, lr=0.03, schedule=[120, 160],
-              momentum=0.9, weight_decay=0.0001, print_freq=10, resume='',
-              world_size=-1, rank=-1, dist_url='tcp://224.66.41.62:23456',
-              dist_backend='nccl', seed=None, gpu=None,
-              multiprocessing_distributed=False, moco_dim=128, moco_k=65536,
-              moco_m=0.999, moco_t=0.07, mlp=False, aug_plus=False, cos=False)
-    """
-    args.gpu = gpu
-
-    # suppress printing if not master
-    if args.multiprocessing_distributed and args.gpu != 0:
-        def print_pass(*args):
-            pass
-        builtins.print = print_pass
-
-    if args.gpu is not None:
-        print("Use GPU: {} for training".format(args.gpu))
-
-
-    # define loss function (criterion) and optimizer
-    criterion = nn.CrossEntropyLoss().cuda(args.gpu)
-
-    optimizer = torch.optim.SGD(model.parameters(), args.lr,
-                                momentum=args.momentum,
-                                weight_decay=args.weight_decay)
-
-
-    cudnn.benchmark = True
-
-    # Data loading code
-    traindir = os.path.join(args.data, 'train')
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
-
-    train_dataset = datasets.ImageFolder(
-        traindir,
-        moco.loader.TwoCropsTransform(transforms.Compose(augmentation)))
-
-    if args.distributed:
-        train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
-    else:
-        train_sampler = None
-
-    train_loader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
-        num_workers=args.workers, pin_memory=True, sampler=train_sampler, drop_last=True)
-
-    for epoch in range(args.start_epoch, args.epochs):
-        if args.distributed:
-            train_sampler.set_epoch(epoch)
-        adjust_learning_rate(optimizer, epoch, args)
-
-        # train for one epoch
-        train(train_loader, model, criterion, optimizer, epoch, args)
-
-        if not args.multiprocessing_distributed or (args.multiprocessing_distributed
-                and args.rank % ngpus_per_node == 0):
-            save_checkpoint({
-                'epoch': epoch + 1,
-                'arch': args.arch,
-                'state_dict': model.state_dict(),
-                'optimizer' : optimizer.state_dict(),
-            }, is_best=False, filename='checkpoint_{:04d}.pth.tar'.format(epoch))
+# def main_worker(gpu, ngpus_per_node, args):
+#     """
+#     Namespace(data='/data/taiyo', arch='resnet50', workers=32, epochs=200,
+#               start_epoch=0, batch_size=256, lr=0.03, schedule=[120, 160],
+#               momentum=0.9, weight_decay=0.0001, print_freq=10, resume='',
+#               world_size=-1, rank=-1, dist_url='tcp://224.66.41.62:23456',
+#               dist_backend='nccl', seed=None, gpu=None,
+#               multiprocessing_distributed=False, moco_dim=128, moco_k=65536,
+#               moco_m=0.999, moco_t=0.07, mlp=False, aug_plus=False, cos=False)
+#     """
+#     args.gpu = gpu
+#
+#     # suppress printing if not master
+#     if args.multiprocessing_distributed and args.gpu != 0:
+#         def print_pass(*args):
+#             pass
+#         builtins.print = print_pass
+#
+#     if args.gpu is not None:
+#         print("Use GPU: {} for training".format(args.gpu))
+#
+#
+#     # define loss function (criterion) and optimizer
+#     criterion = nn.CrossEntropyLoss().cuda(args.gpu)
+#
+#     optimizer = torch.optim.SGD(model.parameters(), args.lr,
+#                                 momentum=args.momentum,
+#                                 weight_decay=args.weight_decay)
+#
+#
+#     cudnn.benchmark = True
+#
+#     # Data loading code
+#     traindir = os.path.join(args.data, 'train')
+#     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+#                                      std=[0.229, 0.224, 0.225])
+#
+#     train_dataset = datasets.ImageFolder(
+#         traindir,
+#         moco.loader.TwoCropsTransform(transforms.Compose(augmentation)))
+#
+#     if args.distributed:
+#         train_sampler = torch.utils.data.distributed.DistributedSampler(train_dataset)
+#     else:
+#         train_sampler = None
+#
+#     train_loader = torch.utils.data.DataLoader(
+#         train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
+#         num_workers=args.workers, pin_memory=True, sampler=train_sampler, drop_last=True)
+#
+#     for epoch in range(args.start_epoch, args.epochs):
+#         if args.distributed:
+#             train_sampler.set_epoch(epoch)
+#         adjust_learning_rate(optimizer, epoch, args)
+#
+#         # train for one epoch
+#         train(train_loader, model, criterion, optimizer, epoch, args)
+#
+#         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
+#                 and args.rank % ngpus_per_node == 0):
+#             save_checkpoint({
+#                 'epoch': epoch + 1,
+#                 'arch': args.arch,
+#                 'state_dict': model.state_dict(),
+#                 'optimizer' : optimizer.state_dict(),
+#             }, is_best=False, filename='checkpoint_{:04d}.pth.tar'.format(epoch))
 
 
 def moco_train(train_loader, model, criterion, optimizer, epoch, args):
@@ -374,24 +375,24 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
     is_coco = data.endswith('coco.yaml') and nc == 80  # COCO dataset
 
     # strat:@moce Model
-    moco_model = moco.moco.builder.MoCo(
-        models.__dict__[opt.arch],
-        opt.moco_dim, opt.moco_k, opt.moco_m, opt.moco_t, opt.mlp).to(device)
-    opt.lr = 0.03
+    # moco_model = moco.moco.builder.MoCo(
+    #     models.__dict__[opt.arch],
+    #     opt.moco_dim, opt.moco_k, opt.moco_m, opt.moco_t, opt.mlp).to(device)
+    # opt.lr = 0.03
     # end:@moco
     pretrained = weights.endswith('.pt')
     if pretrained:
         with torch_distributed_zero_first(RANK):
             weights = attempt_download(weights)  # download if not found locally
         ckpt = torch.load(weights, map_location=device)  # load checkpoint
-        model = Model(cfg or ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+        model = Model(opt.arch, cfg or ckpt['model'].yaml, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
         exclude = ['anchor'] if (cfg or hyp.get('anchors')) and not resume else []  # exclude keys
         csd = ckpt['model'].float().state_dict()  # checkpoint state_dict as FP32
         csd = intersect_dicts(csd, model.state_dict(), exclude=exclude)  # intersect
         model.load_state_dict(csd, strict=False)  # load
         LOGGER.info(f'Transferred {len(csd)}/{len(model.state_dict())} items from {weights}')  # report
     else:
-        model = Model(cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
+        model = Model(opt.arch, cfg, ch=3, nc=nc, anchors=hyp.get('anchors')).to(device)  # create
 
     # Freeze
     freeze = [f'model.{x}.' for x in range(freeze)]  # layers to freeze
@@ -400,25 +401,6 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
         if any(x in k for x in freeze):
             print(f'freezing {k}')
             v.requires_grad = False
-
-    # moco define loss function (criterion) and optimizer
-    moco_criterion = nn.CrossEntropyLoss().cuda(None)
-
-    moco_optimizer = torch.optim.SGD(model.parameters(), 0.03,
-                                momentum=0.9,
-                                weight_decay=0.001)
-    # cudnn.benchmark = True
-
-    # Data loading code
-    # traindir = os.path.join(args.data, 'train')
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
-
-    # train_dataset = datasets.ImageFolder(
-    #     traindir,
-    #     moco.loader.TwoCropsTransform(transforms.Compose(augmentation)))
-
-
 
     # Optimizer
     nbs = 64  # nominal batch size
@@ -496,37 +478,37 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
         LOGGER.info('Using SyncBatchNorm()')
 
     # start:@moco
-    if opt.aug_plus:
-        # MoCo v2's aug: similar to SimCLR https://arxiv.org/abs/2002.05709
-        augmentation = [
-            transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
-            transforms.RandomApply([
-                transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)  # not strengthened
-            ], p=0.8),
-            transforms.RandomGrayscale(p=0.2),
-            transforms.RandomApply([moco.loader.GaussianBlur([.1, 2.])], p=0.5),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize
-        ]
-    else:
-        # MoCo v1's aug: the same as InstDisc https://arxiv.org/abs/1805.01978
-        augmentation = [
-            transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
-            transforms.RandomGrayscale(p=0.2),
-            transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
-            normalize
-        ]
+    # if opt.aug_plus:
+    #     # MoCo v2's aug: similar to SimCLR https://arxiv.org/abs/2002.05709
+    #     augmentation = [
+    #         transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
+    #         transforms.RandomApply([
+    #             transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)  # not strengthened
+    #         ], p=0.8),
+    #         transforms.RandomGrayscale(p=0.2),
+    #         transforms.RandomApply([moco.loader.GaussianBlur([.1, 2.])], p=0.5),
+    #         transforms.RandomHorizontalFlip(),
+    #         transforms.ToTensor(),
+    #         normalize
+    #     ]
+    # else:
+    #     # MoCo v1's aug: the same as InstDisc https://arxiv.org/abs/1805.01978
+    #     augmentation = [
+    #         transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
+    #         transforms.RandomGrayscale(p=0.2),
+    #         transforms.ColorJitter(0.4, 0.4, 0.4, 0.4),
+    #         transforms.RandomHorizontalFlip(),
+    #         transforms.ToTensor(),
+    #         normalize
+    #     ]
 
     # TOTO: dataloader
-    moco_train_dataset = datasets.ImageFolder(
-        train_path,
-        moco.moco.loader.TwoCropsTransform(transforms.Compose(augmentation)))
-    moco_train_loader = torch.utils.data.DataLoader(
-        moco_train_dataset, batch_size=opt.batch, shuffle=True,
-        num_workers=opt.workers, pin_memory=True, sampler=None, drop_last=True)
+    # moco_train_dataset = datasets.ImageFolder(
+    #     train_path,
+    #     moco.moco.loader.TwoCropsTransform(transforms.Compose(augmentation)))
+    # moco_train_loader = torch.utils.data.DataLoader(
+    #     moco_train_dataset, batch_size=opt.batch, shuffle=True,
+    #     num_workers=opt.workers, pin_memory=True, sampler=None, drop_last=True)
     # end:@modo
     # Trainloader
     train_loader, dataset = create_dataloader(train_path, imgsz, batch_size // WORLD_SIZE, gs, single_cls,
@@ -589,10 +571,23 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                 f'Starting training for {epochs} epochs...')
     for epoch in range(start_epoch, epochs):  # epoch ------------------------------------------------------------------
         # start:@moco
-        adjust_learning_rate(moco_optimizer, epoch, opt)
-        moco_train(moco_train_loader, moco_model, moco_criterion, moco_optimizer, epoch, opt)
+        # adjust_learning_rate(moco_optimizer, epoch, opt)
+        # # moco_train(train_loader, moco_model, moco_criterion, moco_optimizer, epoch, opt)
+        batch_time = AverageMeter('Time', ':6.3f')
+        data_time = AverageMeter('Data', ':6.3f')
+        losses = AverageMeter('Loss', ':.4e')
+        top1 = AverageMeter('Acc@1', ':6.2f')
+        top5 = AverageMeter('Acc@5', ':6.2f')
+        progress = ProgressMeter(
+            len(train_loader),
+            [batch_time, data_time, losses, top1, top5],
+            prefix="Epoch: [{}]".format(epoch))
         # end:@moco
         model.train()
+
+        # start:@moco
+        end = time.time()
+        # end:@moco
 
         # Update image weights (optional)
         if opt.image_weights:
@@ -644,8 +639,12 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
                     imgs = nn.functional.interpolate(imgs, size=ns, mode='bilinear', align_corners=False)
 
             # Forward
+            # start:@moco
+            data_time.update(time.time() - end)
+            # output, target = model()
+            # end:@moco
             with amp.autocast(enabled=cuda):
-                pred = model(imgs)  # forward
+                output, target, pred = model(imgs, im_q=imgs[0], im_k=imgs[1])  # forward
                 loss, loss_items = compute_loss(pred, targets.to(device))  # loss scaled by batch_size
                 if RANK != -1:
                     loss *= WORLD_SIZE  # gradient averaged between devices in DDP mode
