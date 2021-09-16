@@ -519,6 +519,8 @@ def train(hyp,  # path/to/hyp.yaml or hyp dictionary
             transforms.ToTensor(),
             normalize
         ]
+
+    # TOTO: dataloader
     moco_train_dataset = datasets.ImageFolder(
         train_path,
         moco.moco.loader.TwoCropsTransform(transforms.Compose(augmentation)))
